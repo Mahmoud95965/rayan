@@ -286,24 +286,41 @@ npm install -g lighthouse
 lighthouse https://your-site.netlify.app
 ```
 
----
+## 🔧 حل المشاكل الشائعة
 
-## 🚨 استكشاف الأخطاء
-
-### مشاكل شائعة:
-
-#### 1. **"Build failed"**
+### مشكلة: Build فشل
 ```bash
-# تحقق من package.json
+# تحقق من الأخطاء
 npm run build
 
-# تحقق من الأخطاء
-npm run build 2>&1 | tee build.log
+# إصلاح المشاكل الشائعة
+npm install
+npm run build
 ```
 
-#### 2. **"Page not found"**
-- تأكد من وجود `[[redirects]]` في `netlify.toml`
-- تحقق من مجلد `dist`
+### مشكلة: Terser not found
+```bash
+# إضافة Terser (مطلوب لـ Netlify)
+npm install terser -D
+
+# تحديث browserslist
+npx update-browserslist-db@latest
+
+# اختبار البناء
+npm run build
+```
+
+### مشكلة: Dependencies مفقودة
+```bash
+# تثبيت جميع التبعيات
+npm install
+
+# تحديث package-lock.json
+npm update
+
+# إعادة البناء
+npm run build
+```
 
 #### 3. **"Firebase Error"**
 - تحقق من متغيرات البيئة
