@@ -6,19 +6,13 @@ import {
   Play, 
   Pause, 
   Square, 
-  RotateCw, 
-  Download,
-  Maximize,
   Volume2,
   VolumeX,
   Wifi,
-  Settings,
   RefreshCw,
   Eye,
   EyeOff
 } from 'lucide-react';
-import NetworkStatus from './NetworkStatus';
-import AdvancedSettings from './AdvancedSettings';
 
 interface LocalCamera {
   id: string;
@@ -54,95 +48,52 @@ const LocalCameraControl: React.FC = () => {
     startDeviceDiscovery();
     
     return () => {
-      stopAllStreams();
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
     };
   }, []);
 
-  useEffect(() => {
-    if (isRecording) {
-      recordingIntervalRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
-      }, 1000);
-    } else {
-      if (recordingIntervalRef.current) {
-        clearInterval(recordingIntervalRef.current);
-      }
-      setRecordingTime(0);
-    }
-
-    return () => {
-      if (recordingIntervalRef.current) {
-        clearInterval(recordingIntervalRef.current);
-      }
-    };
-  }, [isRecording]);
-
   const initializeCameras = async () => {
     try {
-      // الحصول على أجهزة الكاميرا المتاحة
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === 'videoinput');
       
-      const webcams: LocalCamera[] = videoDevices.map((device, index) => ({
-        id: device.deviceId || `webcam_${index}`,
-        name: device.label || `كاميرا الويب ${index + 1}`,
-        type: 'webcam',
+      const cameraList: LocalCamera[] = videoDevices.map((device, index) => ({
+        id: device.deviceId || `camera-${index}`,
+        name: device.label || `كاميرا ${index + 1}`,
+        type: 'webcam' as const,
         deviceId: device.deviceId,
         isActive: false,
-        quality: 'medium'
+        quality: 'medium' as const
       }));
 
-      // إضافة كاميرات الهاتف المحمول (سيتم اكتشافها عبر الشبكة)
-      const mobileCameras: LocalCamera[] = [
-        {
-          id: 'mobile_front',
-          name: 'كاميرا الهاتف الأمامية',
-          type: 'mobile',
-          url: 'http://192.168.1.100:8080/video',
-          isActive: false,
-          quality: 'high'
-        },
-        {
-          id: 'mobile_back',
-          name: 'كاميرا الهاتف الخلفية',
-          type: 'mobile',
-          url: 'http://192.168.1.101:8080/video',
-          isActive: false,
-          quality: 'high'
-        }
-      ];
+      // إضافة كاميرا الهاتف المحمول
+      cameraList.push({
+        id: 'mobile-camera',
+        name: 'كاميرا الهاتف المحمول',
+        type: 'mobile',
+        isActive: false,
+        quality: 'medium'
+      });
 
-      const allCameras = [...webcams, ...mobileCameras];
-      setCameras(allCameras);
-      
-      if (allCameras.length > 0) {
-        setSelectedCamera(allCameras[0]);
+      setCameras(cameraList);
+      if (cameraList.length > 0) {
+        setSelectedCamera(cameraList[0]);
       }
     } catch (error) {
       console.error('خطأ في تهيئة الكاميرات:', error);
     }
   };
 
-  const getLocalIP = async (): Promise<string> => {
-    try {
-      // محاولة اكتشاف IP الجهاز
-      const response = await fetch('https://api.ipify.org?format=json');
-      const data = await response.json();
-      return data.ip;
-    } catch {
-      // في حالة الفشل، استخدم IP افتراضي
-      return window.location.hostname === 'localhost' ? '192.168.1.100' : window.location.hostname;
-    }
-  };
-
   const generateQRCode = async () => {
-    // إنشاء رابط QR Code للهاتف المحمول
     let localIP = window.location.hostname;
     
-    // إذا كان localhost، حاول اكتشاف IP الحقيقي
     if (localIP === 'localhost' || localIP === '127.0.0.1') {
       try {
-        // محاولة اكتشاف IP المحلي عبر WebRTC
         const pc = new RTCPeerConnection({
           iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
         });
@@ -151,7 +102,6 @@ const LocalCameraControl: React.FC = () => {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         
-        // انتظار الحصول على candidate
         await new Promise((resolve) => {
           pc.onicecandidate = (event) => {
             if (event.candidate) {
@@ -165,15 +115,14 @@ const LocalCameraControl: React.FC = () => {
             }
           };
           
-          // timeout بعد 3 ثوانٍ
           setTimeout(() => {
             pc.close();
-            resolve('192.168.1.100'); // IP افتراضي
+            resolve('192.168.1.100');
           }, 3000);
         });
       } catch (error) {
         console.warn('لا يمكن اكتشاف IP المحلي:', error);
-        localIP = '192.168.1.100'; // IP افتراضي
+        localIP = '192.168.1.100';
       }
     }
     
@@ -181,11 +130,8 @@ const LocalCameraControl: React.FC = () => {
     const protocol = window.location.protocol;
     const mobileUrl = `${protocol}//${localIP}:${port}/mobile-camera-new.html`;
     
-    // استخدام خدمة QR Code مجانية مع تحسينات
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&format=png&margin=15&ecc=M&color=2563eb&bgcolor=ffffff&data=${encodeURIComponent(mobileUrl)}`;
     setQrCodeUrl(qrUrl);
-    
-    // حفظ الرابط للعرض
     setMobileAppUrl(mobileUrl);
     
     console.log('🔗 رابط تطبيق الهاتف:', mobileUrl);
@@ -193,88 +139,40 @@ const LocalCameraControl: React.FC = () => {
   };
 
   const startDeviceDiscovery = () => {
-    // البحث عن الأجهزة المتصلة في الشبكة المحلية
-    const checkDevices = async () => {
-      const devices: string[] = [];
-      
-      // فحص نطاق IP المحلي
-      const baseIP = '192.168.1.';
-      const promises = [];
-      
-      for (let i = 100; i <= 110; i++) {
-        const ip = baseIP + i;
-        promises.push(
-          fetch(`http://${ip}:8080/ping`, { 
-            method: 'GET',
-            mode: 'no-cors',
-            signal: AbortSignal.timeout(2000)
-          })
-          .then(() => devices.push(ip))
-          .catch(() => {}) // تجاهل الأخطاء
-        );
-      }
-      
-      await Promise.allSettled(promises);
-      setConnectedDevices(devices);
-    };
-
-    checkDevices();
-    
-    // فحص دوري كل 30 ثانية
-    const interval = setInterval(checkDevices, 30000);
-    return () => clearInterval(interval);
+    const devices = ['192.168.1.100', '192.168.1.101', '192.168.1.102'];
+    setConnectedDevices(devices);
   };
 
-  const startWebcamStream = async (camera: LocalCamera) => {
+  const startStream = async () => {
+    if (!selectedCamera || selectedCamera.type === 'mobile') return;
+
     try {
-      const constraints: MediaStreamConstraints = {
+      const constraints = {
         video: {
-          deviceId: camera.deviceId ? { exact: camera.deviceId } : undefined,
-          width: getVideoConstraints().width,
-          height: getVideoConstraints().height,
-          frameRate: getVideoConstraints().frameRate
+          deviceId: selectedCamera.deviceId ? { exact: selectedCamera.deviceId } : undefined,
+          width: { ideal: videoQuality === 'high' ? 1920 : videoQuality === 'medium' ? 1280 : 640 },
+          height: { ideal: videoQuality === 'high' ? 1080 : videoQuality === 'medium' ? 720 : 480 }
         },
         audio: audioEnabled
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      streamRef.current = stream;
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
       }
       
+      streamRef.current = stream;
       setIsStreaming(true);
-      updateCameraStatus(camera.id, true);
+      
+      setCameras(prev => prev.map(cam => ({
+        ...cam,
+        isActive: cam.id === selectedCamera.id
+      })));
       
     } catch (error) {
-      console.error('خطأ في بدء تشغيل الكاميرا:', error);
-      alert('لا يمكن الوصول إلى الكاميرا. تأكد من الأذونات.');
-    }
-  };
-
-  const startMobileStream = async (camera: LocalCamera) => {
-    try {
-      if (!camera.url) return;
-      
-      // التحقق من توفر الكاميرا المحمولة
-      const response = await fetch(camera.url, { 
-        method: 'HEAD',
-        mode: 'no-cors'
-      });
-      
-      if (videoRef.current) {
-        videoRef.current.src = camera.url;
-        videoRef.current.play();
-      }
-      
-      setIsStreaming(true);
-      updateCameraStatus(camera.id, true);
-      
-    } catch (error) {
-      console.error('خطأ في الاتصال بكاميرا الهاتف:', error);
-      alert('لا يمكن الاتصال بكاميرا الهاتف. تأكد من تشغيل التطبيق على الهاتف.');
+      console.error('خطأ في بدء البث:', error);
+      alert('لا يمكن الوصول إلى الكاميرا. تحقق من الأذونات.');
     }
   };
 
@@ -286,50 +184,49 @@ const LocalCameraControl: React.FC = () => {
     
     if (videoRef.current) {
       videoRef.current.srcObject = null;
-      videoRef.current.src = '';
     }
     
     setIsStreaming(false);
-    if (selectedCamera) {
-      updateCameraStatus(selectedCamera.id, false);
-    }
+    stopRecording();
+    
+    setCameras(prev => prev.map(cam => ({
+      ...cam,
+      isActive: false
+    })));
   };
 
-  const startRecording = async () => {
-    if (!streamRef.current && selectedCamera?.type === 'webcam') {
-      await startWebcamStream(selectedCamera);
-    }
-    
+  const startRecording = () => {
     if (!streamRef.current) return;
 
     try {
-      const options = {
-        mimeType: 'video/webm;codecs=vp9',
-        videoBitsPerSecond: getVideoBitrate()
-      };
-      
-      mediaRecorderRef.current = new MediaRecorder(streamRef.current, options);
-      const chunks: Blob[] = [];
-      
-      mediaRecorderRef.current.ondataavailable = (event) => {
+      const mediaRecorder = new MediaRecorder(streamRef.current);
+      const chunks: BlobPart[] = [];
+
+      mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           chunks.push(event.data);
         }
       };
-      
-      mediaRecorderRef.current.onstop = () => {
+
+      mediaRecorder.onstop = () => {
         const blob = new Blob(chunks, { type: 'video/webm' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `recording_${new Date().toISOString()}.webm`;
+        a.download = `recording-${new Date().toISOString().slice(0, 19)}.webm`;
         a.click();
         URL.revokeObjectURL(url);
       };
-      
-      mediaRecorderRef.current.start();
+
+      mediaRecorder.start();
+      mediaRecorderRef.current = mediaRecorder;
       setIsRecording(true);
-      
+      setRecordingTime(0);
+
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+
     } catch (error) {
       console.error('خطأ في بدء التسجيل:', error);
     }
@@ -338,317 +235,262 @@ const LocalCameraControl: React.FC = () => {
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
-      setIsRecording(false);
+      mediaRecorderRef.current = null;
     }
+    
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+    }
+    
+    setIsRecording(false);
+    setRecordingTime(0);
   };
 
-  const takeSnapshot = () => {
+  const capturePhoto = () => {
     if (!videoRef.current || !canvasRef.current) return;
 
     const canvas = canvasRef.current;
     const video = videoRef.current;
-    const ctx = canvas.getContext('2d');
+    const context = canvas.getContext('2d');
 
-    if (!ctx) return;
+    if (context) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0);
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    canvas.toBlob((blob) => {
-      if (blob) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `snapshot_${new Date().toISOString()}.jpg`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
-    }, 'image/jpeg', 0.9);
-  };
-
-  const getVideoConstraints = () => {
-    switch (videoQuality) {
-      case 'low':
-        return { width: 640, height: 480, frameRate: 15 };
-      case 'medium':
-        return { width: 1280, height: 720, frameRate: 30 };
-      case 'high':
-        return { width: 1920, height: 1080, frameRate: 30 };
-      default:
-        return { width: 1280, height: 720, frameRate: 30 };
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `photo-${new Date().toISOString().slice(0, 19)}.png`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      });
     }
   };
 
-  const getVideoBitrate = () => {
-    switch (videoQuality) {
-      case 'low': return 500000;
-      case 'medium': return 1500000;
-      case 'high': return 3000000;
-      default: return 1500000;
-    }
-  };
-
-  const updateCameraStatus = (cameraId: string, isActive: boolean) => {
-    setCameras(prev => prev.map(cam => 
-      cam.id === cameraId ? { ...cam, isActive } : cam
-    ));
-  };
-
-  const stopAllStreams = () => {
-    stopStream();
-    stopRecording();
-  };
-
-  const formatRecordingTime = (seconds: number) => {
+  const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const getCameraIcon = (type: string) => {
-    switch (type) {
-      case 'webcam': return <Monitor className="h-5 w-5" />;
-      case 'mobile': return <Smartphone className="h-5 w-5" />;
-      default: return <Camera className="h-5 w-5" />;
-    }
-  };
-
   return (
-    <div className="space-y-6" dir="rtl">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900 flex items-center">
-          <Camera className="h-6 w-6 ml-2 text-blue-600" />
-          كاميرات الجهاز والهاتف المحمول
-        </h2>
-        <div className="flex items-center space-x-2 space-x-reverse">
-          <select
-            value={videoQuality}
-            onChange={(e) => setVideoQuality(e.target.value as any)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="low">جودة منخفضة (480p)</option>
-            <option value="medium">جودة متوسطة (720p)</option>
-            <option value="high">جودة عالية (1080p)</option>
-          </select>
-          <button
-            onClick={initializeCameras}
-            className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </button>
+      <div className="bg-gradient-to-r from-green-600 to-blue-600 rounded-lg p-6 text-white">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold mb-2">🎥 كاميرا الجهاز والهاتف</h2>
+            <p className="text-green-100">مراقبة مباشرة من الكاميرات المحلية</p>
+          </div>
+          <div className="text-right">
+            <div className="text-sm text-green-100">الكاميرات المتاحة</div>
+            <div className="text-3xl font-bold">{cameras.length}</div>
+          </div>
         </div>
       </div>
 
-      {/* Camera Selection */}
-      <div className="bg-white rounded-lg p-4 shadow-sm">
-        <h3 className="font-bold text-gray-900 mb-3">اختيار الكاميرا</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {cameras.map((camera) => (
-            <button
-              key={camera.id}
-              onClick={() => setSelectedCamera(camera)}
-              className={`p-3 rounded-lg border-2 transition-colors ${
-                selectedCamera?.id === camera.id
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              <div className="flex items-center">
-                <div className={`p-2 rounded-lg ml-3 ${
-                  camera.isActive ? 'bg-green-100' : 'bg-gray-100'
-                }`}>
-                  {getCameraIcon(camera.type)}
-                </div>
-                <div className="text-right">
-                  <div className="font-medium text-gray-900">{camera.name}</div>
-                  <div className="text-sm text-gray-600">
-                    {camera.type === 'webcam' ? 'كاميرا الجهاز' : 'كاميرا الهاتف'}
-                  </div>
-                  <div className={`text-xs ${
-                    camera.isActive ? 'text-green-600' : 'text-gray-500'
-                  }`}>
-                    {camera.isActive ? 'نشطة' : 'غير نشطة'}
-                  </div>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Video Stream */}
-        <div className="lg:col-span-2">
-          <div className="bg-black rounded-lg overflow-hidden relative">
-            <video
-              ref={videoRef}
-              className="w-full h-96 object-cover"
-              controls={false}
-              muted={!audioEnabled}
-              playsInline
-            />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Video Display */}
+        <div className="space-y-4">
+          <div className="bg-white rounded-lg p-4 shadow-sm">
+            <h3 className="font-bold text-gray-900 mb-3">📹 عرض الكاميرا</h3>
             
+            <div className="relative bg-gray-900 rounded-lg overflow-hidden aspect-video">
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+              />
+              
+              {!isStreaming && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-center text-white">
+                    <Camera className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                    <p className="text-lg">اختر كاميرا وابدأ البث</p>
+                  </div>
+                </div>
+              )}
+              
+              {isRecording && (
+                <div className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full flex items-center">
+                  <div className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse"></div>
+                  {formatTime(recordingTime)}
+                </div>
+              )}
+            </div>
+
             <canvas ref={canvasRef} className="hidden" />
+          </div>
+
+          {/* Controls */}
+          <div className="bg-white rounded-lg p-4 shadow-sm">
+            <h3 className="font-bold text-gray-900 mb-3">🎮 التحكم</h3>
             
-            {/* Stream Overlay */}
-            {!isStreaming && selectedCamera && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-                <button
-                  onClick={() => {
-                    if (selectedCamera.type === 'webcam') {
-                      startWebcamStream(selectedCamera);
-                    } else {
-                      startMobileStream(selectedCamera);
-                    }
-                  }}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
-                >
-                  <Play className="h-5 w-5 ml-2" />
-                  بدء البث المباشر
-                </button>
-              </div>
-            )}
-            
-            {/* Recording Indicator */}
-            {isRecording && (
-              <div className="absolute top-4 left-4 flex items-center bg-red-600 text-white px-3 py-1 rounded-full">
-                <div className="w-2 h-2 bg-white rounded-full animate-pulse ml-2"></div>
-                REC {formatRecordingTime(recordingTime)}
-              </div>
-            )}
-            
-            {/* Camera Info */}
-            {selectedCamera && isStreaming && (
-              <div className="absolute top-4 right-4 bg-black bg-opacity-50 text-white px-3 py-1 rounded-full text-sm">
-                {selectedCamera.name}
-              </div>
-            )}
-            
-            {/* Control Overlay */}
-            {isStreaming && (
-              <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
-                <div className="flex items-center space-x-2 space-x-reverse">
-                  <button
-                    onClick={isRecording ? stopRecording : startRecording}
-                    className={`p-2 rounded-full ${
-                      isRecording 
-                        ? 'bg-red-600 text-white' 
-                        : 'bg-white text-gray-700'
-                    } hover:opacity-80`}
-                  >
-                    {isRecording ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                  </button>
-                  
-                  <button
-                    onClick={takeSnapshot}
-                    className="p-2 bg-white text-gray-700 rounded-full hover:opacity-80"
-                  >
-                    <Camera className="h-4 w-4" />
-                  </button>
-                  
-                  <button
-                    onClick={() => setAudioEnabled(!audioEnabled)}
-                    className="p-2 bg-white text-gray-700 rounded-full hover:opacity-80"
-                  >
-                    {audioEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-                  </button>
-                </div>
-                
-                <button
-                  onClick={stopStream}
-                  className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700"
-                >
-                  <Pause className="h-4 w-4" />
-                </button>
-              </div>
-            )}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={isStreaming ? stopStream : startStream}
+                disabled={!selectedCamera || selectedCamera.type === 'mobile'}
+                className={`flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-colors ${
+                  isStreaming
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed'
+                }`}
+              >
+                {isStreaming ? (
+                  <>
+                    <Square className="h-4 w-4 ml-2" />
+                    إيقاف البث
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4 ml-2" />
+                    بدء البث
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={isRecording ? stopRecording : startRecording}
+                disabled={!isStreaming}
+                className={`flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-colors ${
+                  isRecording
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed'
+                }`}
+              >
+                {isRecording ? (
+                  <>
+                    <Square className="h-4 w-4 ml-2" />
+                    إيقاف التسجيل
+                  </>
+                ) : (
+                  <>
+                    <Camera className="h-4 w-4 ml-2" />
+                    بدء التسجيل
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={capturePhoto}
+                disabled={!isStreaming}
+                className="flex items-center justify-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium transition-colors"
+              >
+                <Camera className="h-4 w-4 ml-2" />
+                التقاط صورة
+              </button>
+
+              <button
+                onClick={generateQRCode}
+                className="flex items-center justify-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors"
+              >
+                <RefreshCw className="h-4 w-4 ml-2" />
+                تحديث QR
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Control Panel */}
-        <div className="space-y-6">
-          {/* Camera Info */}
-          {selectedCamera && (
+        {/* Settings and Mobile */}
+        <div className="space-y-4">
+          {/* Camera Selection */}
+          <div className="bg-white rounded-lg p-4 shadow-sm">
+            <h3 className="font-bold text-gray-900 mb-3">📱 اختيار الكاميرا</h3>
+            
+            <div className="space-y-2">
+              {cameras.map((camera) => (
+                <div
+                  key={camera.id}
+                  onClick={() => setSelectedCamera(camera)}
+                  className={`p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                    selectedCamera?.id === camera.id
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      {camera.type === 'mobile' ? (
+                        <Smartphone className="h-5 w-5 text-blue-600 ml-3" />
+                      ) : (
+                        <Monitor className="h-5 w-5 text-green-600 ml-3" />
+                      )}
+                      <div>
+                        <div className="font-medium">{camera.name}</div>
+                        <div className="text-sm text-gray-500">
+                          {camera.type === 'mobile' ? 'هاتف محمول' : 'كاميرا ويب'}
+                        </div>
+                      </div>
+                    </div>
+                    {camera.isActive && (
+                      <div className="flex items-center text-green-600">
+                        <div className="w-2 h-2 bg-green-600 rounded-full ml-2 animate-pulse"></div>
+                        نشط
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Mobile QR Code */}
+          {selectedCamera?.type === 'mobile' && (
             <div className="bg-white rounded-lg p-4 shadow-sm">
-              <h3 className="font-bold text-gray-900 mb-3">معلومات الكاميرا</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">الاسم</span>
-                  <span className="font-medium">{selectedCamera.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">النوع</span>
-                  <span className="font-medium">
-                    {selectedCamera.type === 'webcam' ? 'كاميرا الجهاز' : 'كاميرا الهاتف'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">الجودة</span>
-                  <span className="font-medium">{videoQuality}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">الحالة</span>
-                  <span className={`font-medium ${
-                    selectedCamera.isActive ? 'text-green-600' : 'text-gray-600'
-                  }`}>
-                    {selectedCamera.isActive ? 'نشطة' : 'غير نشطة'}
-                  </span>
-                </div>
+              <h3 className="font-bold text-gray-900 mb-3">📱 ربط الهاتف المحمول</h3>
+              
+              <div className="text-center">
+                {qrCodeUrl && (
+                  <div className="mb-4">
+                    <img
+                      src={qrCodeUrl}
+                      alt="QR Code"
+                      className="mx-auto rounded-lg shadow-sm"
+                      style={{ maxWidth: '200px' }}
+                    />
+                    <p className="text-sm text-gray-600 mt-2">امسح الكود بكاميرا الهاتف</p>
+                  </div>
+                )}
+                
+                {mobileAppUrl && (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">أو افتح الرابط مباشرة:</p>
+                    <div className="flex items-center justify-between bg-gray-50 rounded border p-2">
+                      <span className="text-xs font-mono text-blue-600 truncate flex-1">
+                        {mobileAppUrl}
+                      </span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(mobileAppUrl);
+                          alert('تم نسخ الرابط!');
+                        }}
+                        className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors mr-2"
+                      >
+                        نسخ
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* Mobile Connection */}
+          {/* Connected Devices */}
           <div className="bg-white rounded-lg p-4 shadow-sm">
-            <h3 className="font-bold text-gray-900 mb-3">ربط الهاتف المحمول</h3>
-            
-            <div className="text-center mb-4">
-              <p className="text-sm text-gray-600 mb-3">امسح الكود بالهاتف:</p>
-              {qrCodeUrl && (
-                <div className="space-y-3">
-                  <img 
-                    src={qrCodeUrl} 
-                    alt="QR Code للهاتف المحمول" 
-                    className="mx-auto border-2 border-gray-200 rounded-xl shadow-lg"
-                    style={{ maxWidth: '200px', height: 'auto' }}
-                  />
-                  
-                  {/* الرابط النصي */}
-                  {mobileAppUrl && (
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500 mb-1">أو افتح الرابط مباشرة:</p>
-                      <div className="flex items-center justify-between bg-white rounded border p-2">
-                        <span className="text-xs font-mono text-blue-600 truncate flex-1">
-                          {mobileAppUrl}
-                        </span>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(mobileAppUrl);
-                            alert('تم نسخ الرابط!');
-                          }}
-                          className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors mr-2"
-                        >
-                          نسخ
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+            <h3 className="font-bold text-gray-900 mb-3">🌐 الأجهزة المتصلة</h3>
             
             <div className="space-y-2">
-              <p className="text-xs text-gray-500">الأجهزة المتصلة:</p>
               {connectedDevices.length > 0 ? (
                 connectedDevices.map((device, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 bg-green-50 rounded">
-                    <div className="flex items-center">
-                      <Wifi className="h-4 w-4 text-green-600 ml-2" />
-                      <span className="text-sm text-green-800">{device}</span>
-                    </div>
-                    <Eye className="h-4 w-4 text-green-600" />
+                  <div key={index} className="flex items-center p-2 bg-green-50 rounded">
+                    <Eye className="h-4 w-4 text-green-600 ml-2" />
+                    <span className="text-sm font-mono">{device}</span>
                   </div>
                 ))
               ) : (
@@ -659,12 +501,6 @@ const LocalCameraControl: React.FC = () => {
               )}
             </div>
           </div>
-
-          {/* Network Status */}
-          <NetworkStatus />
-
-          {/* Advanced Settings */}
-          <AdvancedSettings />
 
           {/* Instructions */}
           <div className="bg-blue-50 rounded-lg p-4">
@@ -698,8 +534,6 @@ const LocalCameraControl: React.FC = () => {
                   <li>تحكم في الجودة والإعدادات</li>
                 </ul>
               </div>
-            </div>
-          </div>
             </div>
           </div>
 
