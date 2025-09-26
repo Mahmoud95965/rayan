@@ -305,51 +305,54 @@
     </div>
 
     <script>
-        class MobileCameraApp {
-            constructor() {
-                this.videoElement = document.getElementById('videoElement');
-                this.videoOverlay = document.getElementById('videoOverlay');
-                this.statusIndicator = document.getElementById('statusIndicator');
-                this.stream = null;
-                this.isStreaming = false;
-                this.currentCamera = 'user'; // 'user' for front, 'environment' for back
-                this.streamStartTime = null;
-                this.streamTimer = null;
-                this.websocket = null;
+        let stream = null;
+        let isStreaming = false;
+        let currentCamera = 'user'; // 'user' للأمامية، 'environment' للخلفية
+        let currentQuality = 'medium';
+{{ ... }}
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    const timeout = setTimeout(() => {
+                        resolve(false);
+                    }, 3000);
+                    
+                    img.onload = () => {
+                        clearTimeout(timeout);
+                        resolve(true);
+                    };
+                    
+                    img.onerror = () => {
+                        clearTimeout(timeout);
+                        resolve(false);
+                    };
+                    
+                    // استخدام صورة صغيرة للاختبار
+                    img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7?' + Math.random();
+                });
+            }
+
+            // تحديث حالة الاتصال
+            async function updateConnectionStatus() {
+                const connected = navigator.onLine && await checkNetworkConnection();
+                const statusElement = document.getElementById('connectionStatus');
+                const statusText = document.getElementById('statusText');
                 
-                this.initializeElements();
-                this.setupEventListeners();
-                this.detectIPAddress();
-                this.connectToServer();
+                if (connected) {
+                    statusElement.className = 'status connected';
+                    statusText.textContent = 'متصل بالشبكة';
+                } else {
+                    statusElement.className = 'status disconnected';
+                    statusText.textContent = 'غير متصل';
+                }
+                
+                return connected;
             }
-            
-            initializeElements() {
-                this.startBtn = document.getElementById('startBtn');
-                this.stopBtn = document.getElementById('stopBtn');
-                this.switchCameraBtn = document.getElementById('switchCameraBtn');
-                this.flashBtn = document.getElementById('flashBtn');
-                this.settingsBtn = document.getElementById('settingsBtn');
-                this.settingsPanel = document.getElementById('settingsPanel');
-                this.qualitySelect = document.getElementById('qualitySelect');
-                this.fpsSelect = document.getElementById('fpsSelect');
-                this.audioToggle = document.getElementById('audioToggle');
-                this.ipAddress = document.getElementById('ipAddress');
-                this.connectionStatus = document.getElementById('connectionStatus');
-                this.activeCamera = document.getElementById('activeCamera');
-                this.streamTime = document.getElementById('streamTime');
-            }
-            
-            setupEventListeners() {
-                this.startBtn.addEventListener('click', () => this.startStream());
-                this.stopBtn.addEventListener('click', () => this.stopStream());
-                this.switchCameraBtn.addEventListener('click', () => this.switchCamera());
-                this.flashBtn.addEventListener('click', () => this.toggleFlash());
-                this.settingsBtn.addEventListener('click', () => this.toggleSettings());
                 
                 this.qualitySelect.addEventListener('change', () => this.updateStreamSettings());
                 this.fpsSelect.addEventListener('change', () => this.updateStreamSettings());
                 this.audioToggle.addEventListener('change', () => this.updateStreamSettings());
             }
+{{ ... }}
             
             async detectIPAddress() {
                 try {

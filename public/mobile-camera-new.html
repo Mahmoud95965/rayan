@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>كاميرا الهاتف - ريّان</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: white;
+            overflow-x: hidden;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .main-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            gap: 1rem;
+        }
+
+        .video-container {
+            position: relative;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            max-height: 50vh;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 15px;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 2;
+        }
+
+        .video-overlay.hidden {
+            display: none;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .control-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 12px;
+            padding: 1rem;
+            color: white;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .control-btn:active {
+            transform: translateY(0);
+        }
+
+        .control-btn.active {
+            background: rgba(76, 175, 80, 0.8);
+        }
+
+        .control-btn.danger {
+            background: rgba(244, 67, 54, 0.8);
+        }
+
+        .status-bar {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .status-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #f44336;
+        }
+
+        .status-indicator.connected {
+            background: #4caf50;
+        }
+
+        .settings-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .settings-panel.active {
+            display: block;
+        }
+
+        .setting-group {
+            margin-bottom: 1rem;
+        }
+
+        .setting-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+        }
+
+        .setting-group select {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: 8px;
+            border: none;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 1rem;
+        }
+
+        .setting-group select option {
+            background: #333;
+            color: white;
+        }
+
+        .connection-info {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-top: 1rem;
+            text-align: center;
+        }
+
+        .connection-info h3 {
+            margin-bottom: 0.5rem;
+        }
+
+        .ip-display {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.5rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        @media (max-width: 480px) {
+            .controls {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 1.2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🌱 كاميرا ريّان المحمولة</h1>
+        <p>مراقبة المزرعة من الهاتف المحمول</p>
+    </div>
+
+    <div class="main-container">
+        <div class="video-container">
+            <video id="video" autoplay muted playsinline></video>
+            <div class="video-overlay" id="videoOverlay">
+                <h2>📹</h2>
+                <p>اضغط "بدء البث" لتشغيل الكاميرا</p>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="control-btn" id="startBtn">▶️ بدء البث</button>
+            <button class="control-btn danger" id="stopBtn" style="display: none;">⏹️ إيقاف البث</button>
+            <button class="control-btn" id="switchBtn">🔄 تبديل الكاميرا</button>
+            <button class="control-btn" id="flashBtn">💡 الفلاش</button>
+            <button class="control-btn" id="settingsBtn">⚙️ الإعدادات</button>
+            <button class="control-btn" id="fullscreenBtn">📱 ملء الشاشة</button>
+        </div>
+
+        <div class="settings-panel" id="settingsPanel">
+            <div class="setting-group">
+                <label>جودة الفيديو:</label>
+                <select id="qualitySelect">
+                    <option value="low">منخفضة (480p)</option>
+                    <option value="medium" selected>متوسطة (720p)</option>
+                    <option value="high">عالية (1080p)</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label>معدل الإطارات:</label>
+                <select id="fpsSelect">
+                    <option value="15">15 FPS</option>
+                    <option value="30" selected>30 FPS</option>
+                    <option value="60">60 FPS</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-item">
+                <span>حالة الاتصال:</span>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div class="status-indicator" id="connectionIndicator"></div>
+                    <span id="connectionText">فحص الاتصال...</span>
+                </div>
+            </div>
+            <div class="status-item">
+                <span>الكاميرا النشطة:</span>
+                <span id="activeCameraText">غير محدد</span>
+            </div>
+            <div class="status-item">
+                <span>وقت البث:</span>
+                <span id="streamTimeText">00:00</span>
+            </div>
+        </div>
+
+        <div class="connection-info">
+            <h3>معلومات الاتصال</h3>
+            <p>عنوان IP:</p>
+            <div class="ip-display" id="ipDisplay">جاري الكشف...</div>
+        </div>
+    </div>
+
+    <script>
+        // متغيرات عامة
+        let stream = null;
+        let isStreaming = false;
+        let currentCamera = 'user';
+        let currentQuality = 'medium';
+        let flashEnabled = false;
+        let wakeLock = null;
+        let streamStartTime = null;
+        let streamTimer = null;
+
+        // إعدادات الجودة
+        const qualitySettings = {
+            low: { width: 640, height: 480, frameRate: 15 },
+            medium: { width: 1280, height: 720, frameRate: 30 },
+            high: { width: 1920, height: 1080, frameRate: 30 }
+        };
+
+        // عناصر DOM
+        const video = document.getElementById('video');
+        const videoOverlay = document.getElementById('videoOverlay');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const switchBtn = document.getElementById('switchBtn');
+        const flashBtn = document.getElementById('flashBtn');
+        const settingsBtn = document.getElementById('settingsBtn');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const settingsPanel = document.getElementById('settingsPanel');
+        const qualitySelect = document.getElementById('qualitySelect');
+        const fpsSelect = document.getElementById('fpsSelect');
+        const connectionIndicator = document.getElementById('connectionIndicator');
+        const connectionText = document.getElementById('connectionText');
+        const activeCameraText = document.getElementById('activeCameraText');
+        const streamTimeText = document.getElementById('streamTimeText');
+        const ipDisplay = document.getElementById('ipDisplay');
+
+        // تهيئة التطبيق
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+            setupEventListeners();
+            checkConnection();
+            detectIP();
+            
+            // فحص الاتصال كل 5 ثوانٍ
+            setInterval(checkConnection, 5000);
+        });
+
+        function initializeApp() {
+            console.log('🚀 تم تشغيل تطبيق كاميرا ريّان المحمولة');
+            updateUI();
+        }
+
+        function setupEventListeners() {
+            startBtn.addEventListener('click', startStream);
+            stopBtn.addEventListener('click', stopStream);
+            switchBtn.addEventListener('click', switchCamera);
+            flashBtn.addEventListener('click', toggleFlash);
+            settingsBtn.addEventListener('click', toggleSettings);
+            fullscreenBtn.addEventListener('click', toggleFullscreen);
+            
+            qualitySelect.addEventListener('change', updateQuality);
+            fpsSelect.addEventListener('change', updateQuality);
+            
+            // منع إغلاق الشاشة
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+        }
+
+        async function startStream() {
+            try {
+                console.log('🎥 بدء تشغيل الكاميرا...');
+                
+                const quality = qualitySettings[currentQuality];
+                const fps = parseInt(fpsSelect.value);
+                
+                const constraints = {
+                    video: {
+                        facingMode: currentCamera,
+                        width: { ideal: quality.width },
+                        height: { ideal: quality.height },
+                        frameRate: { ideal: fps }
+                    },
+                    audio: false
+                };
+
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                
+                isStreaming = true;
+                streamStartTime = Date.now();
+                
+                updateUI();
+                startStreamTimer();
+                requestWakeLock();
+                
+                console.log('✅ تم تشغيل الكاميرا بنجاح');
+                
+            } catch (error) {
+                console.error('❌ خطأ في تشغيل الكاميرا:', error);
+                alert('لا يمكن الوصول إلى الكاميرا. تأكد من الأذونات.');
+            }
+        }
+
+        function stopStream() {
+            try {
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                    stream = null;
+                }
+                
+                video.srcObject = null;
+                isStreaming = false;
+                streamStartTime = null;
+                
+                stopStreamTimer();
+                releaseWakeLock();
+                updateUI();
+                
+                console.log('⏹️ تم إيقاف البث');
+                
+            } catch (error) {
+                console.error('❌ خطأ في إيقاف البث:', error);
+            }
+        }
+
+        async function switchCamera() {
+            if (!isStreaming) return;
+            
+            try {
+                currentCamera = currentCamera === 'user' ? 'environment' : 'user';
+                
+                // إيقاف البث الحالي
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                
+                // بدء بث جديد بالكاميرا الجديدة
+                await startStream();
+                
+                console.log('🔄 تم تبديل الكاميرا إلى:', currentCamera === 'user' ? 'أمامية' : 'خلفية');
+                
+            } catch (error) {
+                console.error('❌ خطأ في تبديل الكاميرا:', error);
+                alert('لا يمكن تبديل الكاميرا');
+            }
+        }
+
+        async function toggleFlash() {
+            if (!stream) return;
+            
+            try {
+                const track = stream.getVideoTracks()[0];
+                const capabilities = track.getCapabilities();
+                
+                if (capabilities.torch) {
+                    flashEnabled = !flashEnabled;
+                    await track.applyConstraints({
+                        advanced: [{ torch: flashEnabled }]
+                    });
+                    
+                    updateUI();
+                    console.log('💡 الفلاش:', flashEnabled ? 'مُفعّل' : 'مُعطّل');
+                } else {
+                    alert('الفلاش غير مدعوم على هذا الجهاز');
+                }
+                
+            } catch (error) {
+                console.error('❌ خطأ في تشغيل الفلاش:', error);
+                alert('لا يمكن التحكم في الفلاش');
+            }
+        }
+
+        function toggleSettings() {
+            const isActive = settingsPanel.classList.contains('active');
+            settingsPanel.classList.toggle('active');
+            settingsBtn.textContent = isActive ? '⚙️ الإعدادات' : '❌ إغلاق';
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+                fullscreenBtn.textContent = '📱 خروج من ملء الشاشة';
+            } else {
+                document.exitFullscreen();
+                fullscreenBtn.textContent = '📱 ملء الشاشة';
+            }
+        }
+
+        function updateQuality() {
+            currentQuality = qualitySelect.value;
+            
+            if (isStreaming) {
+                // إعادة تشغيل البث بالجودة الجديدة
+                stopStream();
+                setTimeout(startStream, 500);
+            }
+        }
+
+        function updateUI() {
+            // تحديث الأزرار
+            startBtn.style.display = isStreaming ? 'none' : 'block';
+            stopBtn.style.display = isStreaming ? 'block' : 'none';
+            
+            // تحديث النصوص
+            activeCameraText.textContent = isStreaming ? 
+                (currentCamera === 'user' ? 'أمامية' : 'خلفية') : 'غير نشطة';
+            
+            flashBtn.classList.toggle('active', flashEnabled);
+            
+            // تحديث overlay الفيديو
+            videoOverlay.classList.toggle('hidden', isStreaming);
+        }
+
+        function startStreamTimer() {
+            streamTimer = setInterval(() => {
+                if (streamStartTime) {
+                    const elapsed = Math.floor((Date.now() - streamStartTime) / 1000);
+                    const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                    const seconds = (elapsed % 60).toString().padStart(2, '0');
+                    streamTimeText.textContent = `${minutes}:${seconds}`;
+                }
+            }, 1000);
+        }
+
+        function stopStreamTimer() {
+            if (streamTimer) {
+                clearInterval(streamTimer);
+                streamTimer = null;
+            }
+            streamTimeText.textContent = '00:00';
+        }
+
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('🔒 تم منع إغلاق الشاشة');
+                }
+            } catch (error) {
+                console.log('⚠️ لا يمكن منع إغلاق الشاشة:', error);
+            }
+        }
+
+        function releaseWakeLock() {
+            if (wakeLock) {
+                wakeLock.release();
+                wakeLock = null;
+                console.log('🔓 تم إلغاء منع إغلاق الشاشة');
+            }
+        }
+
+        function handleVisibilityChange() {
+            if (document.hidden && wakeLock) {
+                releaseWakeLock();
+            } else if (!document.hidden && isStreaming) {
+                requestWakeLock();
+            }
+        }
+
+        async function checkConnection() {
+            try {
+                const online = navigator.onLine;
+                
+                if (online) {
+                    // اختبار الاتصال الفعلي
+                    const response = await fetch(window.location.origin, { 
+                        method: 'HEAD',
+                        cache: 'no-cache'
+                    });
+                    
+                    if (response.ok) {
+                        connectionIndicator.classList.add('connected');
+                        connectionText.textContent = 'متصل';
+                    } else {
+                        connectionIndicator.classList.remove('connected');
+                        connectionText.textContent = 'ضعيف';
+                    }
+                } else {
+                    connectionIndicator.classList.remove('connected');
+                    connectionText.textContent = 'غير متصل';
+                }
+                
+            } catch (error) {
+                connectionIndicator.classList.remove('connected');
+                connectionText.textContent = 'خطأ في الاتصال';
+            }
+        }
+
+        async function detectIP() {
+            try {
+                // محاولة الحصول على IP المحلي
+                const hostname = window.location.hostname;
+                const port = window.location.port;
+                
+                if (hostname && hostname !== 'localhost') {
+                    ipDisplay.textContent = `${hostname}${port ? ':' + port : ''}`;
+                } else {
+                    // محاولة الحصول على IP عبر WebRTC
+                    const pc = new RTCPeerConnection({
+                        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                    });
+                    
+                    pc.createDataChannel('');
+                    pc.createOffer().then(offer => pc.setLocalDescription(offer));
+                    
+                    pc.onicecandidate = (event) => {
+                        if (event.candidate) {
+                            const candidate = event.candidate.candidate;
+                            const match = candidate.match(/(\d+\.\d+\.\d+\.\d+)/);
+                            if (match) {
+                                ipDisplay.textContent = match[1] + (port ? ':' + port : '');
+                                pc.close();
+                            }
+                        }
+                    };
+                }
+                
+            } catch (error) {
+                console.error('خطأ في اكتشاف IP:', error);
+                ipDisplay.textContent = 'غير متاح';
+            }
+        }
+
+        // معالجة الأخطاء العامة
+        window.addEventListener('error', function(event) {
+            console.error('خطأ في التطبيق:', event.error);
+        });
+
+        // رسالة ترحيب
+        console.log('🌱 مرحباً بك في تطبيق كاميرا ريّان المحمولة!');
+        console.log('📱 للحصول على أفضل تجربة، تأكد من:');
+        console.log('   • منح إذن الكاميرا');
+        console.log('   • الاتصال بنفس شبكة Wi-Fi للكمبيوتر');
+        console.log('   • استخدام متصفح حديث');
+    </script>
+</body>
+</html>
