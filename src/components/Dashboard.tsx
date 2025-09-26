@@ -13,6 +13,7 @@ import IoTDashboard from './IoTDashboard';
 import RealCameraControl from './RealCameraControl';
 import IrrigationControl from './IrrigationControl';
 import LocalCameraControl from './LocalCameraControl';
+import DemoModeNotice from './DemoModeNotice';
 
 const Dashboard: React.FC = () => {
   const { userProfile } = useAuth();
@@ -129,16 +130,15 @@ const Dashboard: React.FC = () => {
   const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleDateString('ar-EG', {
       year: 'numeric',
-      month: 'long',
       day: 'numeric'
     });
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4" dir="rtl">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
+    <div className="min-h-screen bg-gray-50" dir="rtl">
+      <DemoModeNotice />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="space-y-8">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">

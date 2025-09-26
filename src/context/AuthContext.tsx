@@ -27,6 +27,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Check if Firebase is configured
+    if (!auth) {
+      // Demo mode - create a mock user
+      const demoUser = {
+        uid: 'demo-user',
+        email: 'demo@rayyan-farm.com',
+        displayName: 'مستخدم تجريبي'
+      };
+      setUser(demoUser as any);
+      setUserProfile({
+        name: 'مستخدم تجريبي',
+        email: 'demo@rayyan-farm.com',
+        displayName: 'مستخدم تجريبي',
+        createdAt: new Date().toISOString()
+      });
+      setLoading(false);
+      return;
+    }
+
     // Listen for auth changes
     const unsubscribe = onAuthStateChanged(auth, async (user: User | null) => {
       setUser(user);
@@ -43,16 +62,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserProfile = async (userId: string) => {
     try {
-      // Try to get profile from Firestore
-      const userDoc = await getDoc(doc(db, 'users', userId));
-      if (userDoc.exists()) {
-        setUserProfile(userDoc.data());
-      } else {
-        // Fallback to localStorage for MVP
-        const profile = localStorage.getItem(`profile_${userId}`);
-        if (profile) {
-          setUserProfile(JSON.parse(profile));
+      // Check if Firestore is available
+      if (db) {
+        // Try to get profile from Firestore
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+          setUserProfile(userDoc.data());
+          return;
         }
+      }
+      
+      // Fallback to localStorage for MVP
+      const profile = localStorage.getItem(`profile_${userId}`);
+      if (profile) {
+        setUserProfile(JSON.parse(profile));
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);
@@ -66,6 +89,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string, userData: any) => {
     try {
+      // Check if Firebase Auth is available
+      if (!auth) {
+        // Demo mode - simulate signup
+        const demoUser = {
+          uid: `demo-${Date.now()}`,
+          email: email,
+          displayName: userData.displayName || userData.name
+        };
+        
+        const profile = {
+          uid: demoUser.uid,
+          email: email,
+          displayName: userData.displayName || userData.name,
+          ...userData,
+          createdAt: new Date().toISOString()
+        };
+        
+        // Save to localStorage
+        localStorage.setItem(`profile_${demoUser.uid}`, JSON.stringify(profile));
+        setUser(demoUser as any);
+        setUserProfile(profile);
+        
+        return { user: demoUser, error: null };
+      }
+
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
@@ -86,8 +134,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       
       try {
-        // Try to save to Firestore
-        await setDoc(doc(db, 'users', user.uid), profile);
+        // Try to save to Firestore if available
+        if (db) {
+          await setDoc(doc(db, 'users', user.uid), profile);
+        } else {
+          // Fallback to localStorage
+          localStorage.setItem(`profile_${user.uid}`, JSON.stringify(profile));
+        }
       } catch (firestoreError) {
         console.warn('Failed to save to Firestore, using localStorage:', firestoreError);
         // Fallback to localStorage
@@ -103,6 +156,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     try {
+      // Check if Firebase Auth is available
+      if (!auth) {
+        // Demo mode - simulate signin
+        if (email === 'demo@rayyan-farm.com' && password === 'demo123') {
+          const demoUser = {
+            uid: 'demo-user',
+            email: 'demo@rayyan-farm.com',
+            displayName: 'مستخدم تجريبي'
+          };
+          setUser(demoUser as any);
+          return { user: demoUser, error: null };
+        } else {
+          return { user: null, error: { message: 'بيانات دخول خاطئة. استخدم: demo@rayyan-farm.com / demo123' } };
+        }
+      }
+
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       return { user: userCredential.user, error: null };
     } catch (error: any) {
@@ -112,7 +181,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     try {
-      await firebaseSignOut(auth);
+      if (auth) {
+        await firebaseSignOut(auth);
+      } else {
+        // Demo mode - just clear state
+        setUser(null);
+      }
       setUserProfile(null);
     } catch (error) {
       console.error('Error signing out:', error);
